@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SSE vs WebSocket Dashboard</title>
+  <style>
+    body { font-family: Arial; display: flex; justify-content: space-around; margin-top: 40px; }
+    .panel { border: 1px solid #ccc; padding: 20px; width: 40%; border-radius: 10px; }
+    h2 { text-align: center; }
+    .value { font-size: 2em; color: #007bff; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="panel" id="sse">
+    <h2>SSE Server</h2>
+    <div class="value" id="sseValue">--</div>
+    <div id="sseTime"></div>
+  </div>
+
+  <div class="panel" id="ws">
+    <h2>WebSocket Server</h2>
+    <div class="value" id="wsValue">--</div>
+    <div id="wsTime"></div>
+  </div>
+
+  <script src="https://cdn.socket.io/5.7.4/socket.io.min.js"></script>
+
+  <script>
+    // --- SSE ---
+    const sseSource = new EventSource("http://127.0.0.1:5000/stream");
+    sseSource.onmessage = event => {
+      const data = JSON.parse(event.data);
+      document.getElementById("sseValue").textContent = data.value;
+      document.getElementById("sseTime").textContent = "Updated at " + data.timestamp;
+    };
+
+    // --- WebSocket ---
+    const ws = io("http://127.0.0.1:8080", {
+    transports: ["websocket", "polling"], // thêm dòng này
+    reconnectionAttempts: 5,              // thử kết nối lại tối đa 5 lần
+    reconnectionDelay: 1000
+  });
+
+  ws.on("connect", () => {
+    console.log("✅ Connected to WebSocket server");
+  });
+
+  ws.on("connect_error", (err) => {
+    console.error("❌ Connection error:", err);
+  });
+
+  ws.on("disconnect", (reason) => {
+    console.warn("⚠️ Disconnected:", reason);
+  });
+
+  ws.on("update", (data) => {
+    console.log("📡 Received update:", data);
+    document.getElementById("wsValue").textContent = data.value;
+    document.getElementById("wsTime").textContent = "Updated at " + data.timestamp;
+  });
+  </script>
+</body>
+</html>
