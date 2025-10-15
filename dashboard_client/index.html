@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SSE vs WebSocket Performance Dashboard</title>
+  <title>🚀 Complete SSE vs WebSocket Demo</title>
   <style>
     body { 
       font-family: Arial, sans-serif; 
@@ -19,6 +19,31 @@
     .header h1 {
       color: #333;
       margin-bottom: 10px;
+    }
+    
+    .feature-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+    
+    .tab-button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    
+    .tab-button.active {
+      background-color: #0056b3;
+    }
+    
+    .tab-button:hover {
+      background-color: #0056b3;
     }
     
     .status-bar {
@@ -42,6 +67,11 @@
     .status-disconnected {
       background-color: #f8d7da;
       color: #721c24;
+    }
+    
+    .status-fallback {
+      background-color: #fff3cd;
+      color: #856404;
     }
     
     .main-dashboard {
@@ -199,6 +229,61 @@
       font-family: monospace;
       font-size: 0.8em;
     }
+
+    /* Các nút điều khiển kết nối */
+    .connection-controls {
+      margin: 15px 0;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    
+    .connection-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
+      font-size: 0.9em;
+    }
+    
+    .connect-btn {
+      background-color: #28a745;
+      color: white;
+    }
+    
+    .connect-btn:hover {
+      background-color: #218838;
+    }
+    
+    .connect-btn:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+    
+    .disconnect-btn {
+      background-color: #dc3545;
+      color: white;
+    }
+    
+    .disconnect-btn:hover {
+      background-color: #c82333;
+    }
+    
+    .disconnect-btn:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .connection-status {
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin: 5px 0;
+      text-align: center;
+      font-size: 0.9em;
+    }
   </style>
 </head>
 <body>
@@ -217,6 +302,11 @@
     <div class="server-panel sse-panel">
       <div class="panel-header">
         <h2>📡 Server-Sent Events (SSE)</h2>
+        <div class="connection-status status-disconnected" id="sseConnectionStatus">Disconnected</div>
+        <div class="connection-controls">
+          <button class="connection-btn connect-btn" id="sseConnectBtn" onclick="connectSSE()">🔗 Connect</button>
+          <button class="connection-btn disconnect-btn" id="sseDisconnectBtn" onclick="disconnectSSE()" disabled>❌ Disconnect</button>
+        </div>
       </div>
       
       <div class="data-display">
@@ -248,6 +338,11 @@
     <div class="server-panel ws-panel">
       <div class="panel-header">
         <h2>🔌 WebSocket</h2>
+        <div class="connection-status status-disconnected" id="wsConnectionStatus">Disconnected</div>
+        <div class="connection-controls">
+          <button class="connection-btn connect-btn" id="wsConnectBtn" onclick="connectWebSocket()">🔗 Connect</button>
+          <button class="connection-btn disconnect-btn" id="wsDisconnectBtn" onclick="disconnectWebSocket()" disabled>❌ Disconnect</button>
+        </div>
       </div>
       
       <div class="data-display">
@@ -341,13 +436,20 @@
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    // Performance tracking variables
+    // Biến theo dõi hiệu suất
     let sseLatency = 0;
     let wsLatency = 0;
     let ssePerformanceData = {};
     let wsPerformanceData = {};
 
-    // Utility functions
+    // Biến theo dõi trạng thái kết nối
+    let sseConnected = false;
+    let wsConnected = false;
+    let sseSource = null;
+    let ws = null;
+    let ssePerformanceSource = null;
+
+    // Các hàm tiện ích
     function log(message) {
       const logDiv = document.getElementById('activityLog');
       const time = new Date().toLocaleTimeString();
@@ -360,8 +462,27 @@
       element.textContent = status;
     }
 
+    // Quản lý trạng thái kết nối
+    function updateConnectionUI(type, connected) {
+      const connectBtn = document.getElementById(`${type}ConnectBtn`);
+      const disconnectBtn = document.getElementById(`${type}DisconnectBtn`);
+      const connectionStatus = document.getElementById(`${type}ConnectionStatus`);
+      
+      if (connected) {
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        connectionStatus.textContent = 'Đã kết nối';
+        connectionStatus.className = 'connection-status status-connected';
+      } else {
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+        connectionStatus.textContent = 'Chưa kết nối';
+        connectionStatus.className = 'connection-status status-disconnected';
+      }
+    }
+
     function updateComparison() {
-      // CPU Usage comparison
+      // So sánh mức sử dụng CPU
       if (ssePerformanceData.cpu_usage !== undefined && wsPerformanceData.cpu_usage !== undefined) {
         document.getElementById('sseCpuUsage').textContent = ssePerformanceData.cpu_usage + '%';
         document.getElementById('wsCpuUsage').textContent = wsPerformanceData.cpu_usage + '%';
@@ -369,7 +490,7 @@
           ssePerformanceData.cpu_usage < wsPerformanceData.cpu_usage ? 'SSE' : 'WebSocket';
       }
 
-      // Memory Usage comparison
+      // So sánh mức sử dụng bộ nhớ
       if (ssePerformanceData.memory_usage !== undefined && wsPerformanceData.memory_usage !== undefined) {
         document.getElementById('sseMemoryUsage').textContent = ssePerformanceData.memory_usage + '%';
         document.getElementById('wsMemoryUsage').textContent = wsPerformanceData.memory_usage + '%';
@@ -377,7 +498,7 @@
           ssePerformanceData.memory_usage < wsPerformanceData.memory_usage ? 'SSE' : 'WebSocket';
       }
 
-      // Throughput comparison
+      // So sánh thông lượng
       if (ssePerformanceData.throughput !== undefined && wsPerformanceData.throughput !== undefined) {
         document.getElementById('sseThroughputComp').textContent = ssePerformanceData.throughput;
         document.getElementById('wsThroughputComp').textContent = wsPerformanceData.throughput;
@@ -386,16 +507,23 @@
       }
     }
 
-    // SSE Connection
+    // Kết nối SSE
     const sseStatus = document.getElementById('sseStatus');
-    let sseSource;
 
     function connectSSE() {
+      if (sseConnected) {
+        log('SSE already connected');
+        return;
+      }
+
       try {
+        log('Connecting to SSE...');
         sseSource = new EventSource("http://127.0.0.1:5000/stream");
         
         sseSource.onopen = () => {
+          sseConnected = true;
           updateStatus(sseStatus, 'SSE: Connected ✅', true);
+          updateConnectionUI('sse', true);
           log('SSE connected successfully');
         };
 
@@ -404,7 +532,7 @@
           document.getElementById("sseValue").textContent = data.value;
           document.getElementById("sseTime").textContent = "Updated at " + data.timestamp;
           
-          // Calculate latency for SSE
+          // Tính toán độ trễ cho SSE
           if (data.send_time) {
             sseLatency = Math.round((Date.now() / 1000 - data.send_time) * 1000);
             document.getElementById("sseLatency").textContent = sseLatency + " ms";
@@ -412,12 +540,14 @@
         };
 
         sseSource.onerror = () => {
+          sseConnected = false;
           updateStatus(sseStatus, 'SSE: Connection Error ❌', false);
+          updateConnectionUI('sse', false);
           log('SSE connection error');
         };
 
-        // Performance data stream
-        const ssePerformanceSource = new EventSource("http://127.0.0.1:5000/performance");
+        // Luồng dữ liệu hiệu suất
+        ssePerformanceSource = new EventSource("http://127.0.0.1:5000/performance");
         ssePerformanceSource.onmessage = event => {
           const data = JSON.parse(event.data);
           ssePerformanceData = data;
@@ -431,17 +561,54 @@
         };
 
       } catch (error) {
+        sseConnected = false;
         updateStatus(sseStatus, 'SSE: Failed to Connect ❌', false);
+        updateConnectionUI('sse', false);
         log('SSE connection failed: ' + error.message);
       }
     }
 
-    // WebSocket Connection
+    function disconnectSSE() {
+      if (!sseConnected) {
+        log('SSE already disconnected');
+        return;
+      }
+
+      try {
+        if (sseSource) {
+          sseSource.close();
+          sseSource = null;
+        }
+        if (ssePerformanceSource) {
+          ssePerformanceSource.close();
+          ssePerformanceSource = null;
+        }
+        
+        sseConnected = false;
+        updateStatus(sseStatus, 'SSE: Disconnected ⏸️', false);
+        updateConnectionUI('sse', false);
+        
+        // Xóa hiển thị dữ liệu
+        document.getElementById("sseValue").textContent = '--';
+        document.getElementById("sseTime").textContent = 'Disconnected';
+        
+        log('SSE disconnected manually');
+      } catch (error) {
+        log('Error disconnecting SSE: ' + error.message);
+      }
+    }
+
+    // Kết nối WebSocket
     const wsStatus = document.getElementById('wsStatus');
-    let ws;
 
     function connectWebSocket() {
+      if (wsConnected) {
+        log('WebSocket already connected');
+        return;
+      }
+
       try {
+        log('Connecting to WebSocket...');
         ws = io("http://127.0.0.1:8080", {
           transports: ["websocket", "polling"],
           reconnectionAttempts: 5,
@@ -449,17 +616,23 @@
         });
 
         ws.on("connect", () => {
+          wsConnected = true;
           updateStatus(wsStatus, 'WebSocket: Connected ✅', true);
+          updateConnectionUI('ws', true);
           log('WebSocket connected successfully');
         });
 
         ws.on("connect_error", (err) => {
+          wsConnected = false;
           updateStatus(wsStatus, 'WebSocket: Connection Error ❌', false);
+          updateConnectionUI('ws', false);
           log('WebSocket connection error: ' + err.message);
         });
 
         ws.on("disconnect", (reason) => {
+          wsConnected = false;
           updateStatus(wsStatus, 'WebSocket: Disconnected ⚠️', false);
+          updateConnectionUI('ws', false);
           log('WebSocket disconnected: ' + reason);
         });
 
@@ -467,7 +640,7 @@
           document.getElementById("wsValue").textContent = data.value;
           document.getElementById("wsTime").textContent = "Updated at " + data.timestamp;
           
-          // Calculate latency for WebSocket
+          // Tính toán độ trễ cho WebSocket
           if (data.send_time) {
             wsLatency = Math.round((Date.now() / 1000 - data.send_time) * 1000);
             document.getElementById("wsLatency").textContent = wsLatency + " ms";
@@ -492,16 +665,43 @@
         });
 
       } catch (error) {
+        wsConnected = false;
         updateStatus(wsStatus, 'WebSocket: Failed to Connect ❌', false);
+        updateConnectionUI('ws', false);
         log('WebSocket connection failed: ' + error.message);
       }
     }
 
-    // Control functions
+    function disconnectWebSocket() {
+      if (!wsConnected) {
+        log('WebSocket already disconnected');
+        return;
+      }
+
+      try {
+        if (ws && ws.connected) {
+          ws.disconnect();
+        }
+        
+        wsConnected = false;
+        updateStatus(wsStatus, 'WebSocket: Disconnected ⏸️', false);
+        updateConnectionUI('ws', false);
+        
+        // Xóa hiển thị dữ liệu
+        document.getElementById("wsValue").textContent = '--';
+        document.getElementById("wsTime").textContent = 'Disconnected';
+        
+        log('WebSocket disconnected manually');
+      } catch (error) {
+        log('Error disconnecting WebSocket: ' + error.message);
+      }
+    }
+
+    // Các hàm điều khiển
     function testLatency() {
       log('Testing latency...');
       
-      // Test WebSocket latency with ping-pong
+      // Kiểm tra độ trễ WebSocket với ping-pong
       if (ws && ws.connected) {
         ws.emit("ping", { timestamp: Date.now() / 1000 });
       }
@@ -514,12 +714,11 @@
 
     function clearLogs() {
       document.getElementById('activityLog').innerHTML = '<div>Logs cleared...</div>';
-    }
-
-    // Initialize connections
-    log('Initializing connections...');
-    connectSSE();
-    connectWebSocket();
+    }  
+    // Initialize UI state
+    log('Dashboard initialized. Use Connect buttons to start connections.');
+    updateConnectionUI('sse', false);
+    updateConnectionUI('ws', false);
 
     // Auto-refresh stats every 5 seconds
     setInterval(() => {
