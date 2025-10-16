@@ -83,11 +83,18 @@ def handle_connect():
     ws_connections += 1
     client_id = str(len(connected_clients) + 1)
     connected_clients.add(client_id)
-    print(f"WebSocket client connected. Total connections: {ws_connections}")
+    print(f"WebSocket client connected. Total connections: {ws_connections}, Client ID: {client_id}")
     
-    # Send current stats to   new client
+    # Send immediate confirmation
+    socketio.emit("connected", {
+        "status": "connected",
+        "client_id": client_id,
+        "server_type": "WebSocket"
+    })
+    
+    # Send current stats to new client
     socketio.emit("stats", {
-        "server_type": "WebSocket",
+        "server_type": "WebSocket", 
         "connections": ws_connections,
         "messages_sent": ws_messages_sent,
         "client_id": client_id
@@ -98,6 +105,16 @@ def handle_disconnect():
     global ws_connections
     ws_connections -= 1
     print(f"WebSocket client disconnected. Total connections: {ws_connections}")
+
+# Handle connection errors
+@socketio.on("connect_error")
+def handle_connect_error(error):
+    print(f"WebSocket connection error: {error}")
+
+# Ping/Pong for latency testing
+@socketio.on("ping")
+def handle_ping(data):
+    socketio.emit("pong", data)
 # Được gọi khi client gửi sự kiện "get_stats"``
 @socketio.on("get_stats")
 def handle_get_stats():
@@ -112,7 +129,7 @@ def handle_get_stats():
     }
     socketio.emit("stats", stats)
 
-# Fallback HTTP endpoints for when WebSocket is not available
+# Fallback HTTP endpoints khi WebSocket không khả dụng
 @app.route("/stats")
 def get_stats_http():
     global ws_connections, ws_messages_sent, ws_start_time
@@ -128,25 +145,138 @@ def get_stats_http():
         "fallback_mode": True
     })
 
+@app.route("/fallback")
+def fallback_endpoint():
+    """Endpoint fallback chính cho WebSocket"""
+    global ws_messages_sent
+    ws_messages_sent += 1
+    
+    return jsonify({
+        "value": random.randint(0, 100),
+        "timestamp": time.strftime("%H:%M:%S"),
+        "message_id": ws_messages_sent,
+        "send_time": time.time(),
+        "fallback": True,
+        "message": "Dữ liệu từ WebSocket fallback endpoint"
+    })
+
+@app.route("/fallback/polling")
+def fallback_polling():
+    """Long polling fallback cho WebSocket"""
+    global ws_messages_sent
+    messages = []
+    
+    # Tạo batch messages cho polling
+    for i in range(3):
+        ws_messages_sent += 1
+        messages.append({
+            "value": random.randint(0, 100),
+            "timestamp": time.strftime("%H:%M:%S"),
+            "message_id": ws_messages_sent,
+            "send_time": time.time(),
+            "fallback": True
+        })
+        time.sleep(0.3)
+    
+    return jsonify({
+        "messages": messages,
+        "count": len(messages),
+        "fallback_type": "long_polling",
+        "next_poll_delay": 1000  # milliseconds
+    })
+
 @app.route("/stream")
 def fallback_stream():
-    """HTTP endpoint for fallback when WebSocket fails"""
+    """HTTP stream fallback khi WebSocket thất bại"""
     def generate():
         global ws_messages_sent
-        for i in range(10):  # Send 10 messages then close
+        for i in range(10):  # Gửi 10 message rồi đóng
+            ws_messages_sent += 1
             data = {
                 "value": random.randint(0, 100),
                 "timestamp": time.strftime("%H:%M:%S"),
-                "message_id": ws_messages_sent + 1,
-                "fallback": True
+                "message_id": ws_messages_sent,
+                "send_time": time.time(),
+                "fallback": True,
+                "stream_position": i + 1
             }
-            ws_messages_sent += 1
             yield f"data: {json.dumps(data)}\n\n"
             time.sleep(1)
+        
+        # Message kết thúc
+        yield f"data: {json.dumps({'end': True, 'message': 'WebSocket fallback stream ended'})}\n\n"
     
     from flask import Response
     import json
-    return Response(generate(), mimetype="text/plain")
+    return Response(generate(), 
+                   mimetype="text/plain",
+                   headers={
+                       'X-Fallback-Mode': 'websocket',
+                       'Cache-Control': 'no-cache'
+                   })
+
+@app.route("/fallback/performance")
+def fallback_performance():
+    """Fallback performance monitoring"""
+    global ws_connections, ws_messages_sent, ws_start_time
+    
+    # Lấy system metrics
+    cpu_percent = psutil.cpu_percent()
+    memory = psutil.virtual_memory()
+    uptime = time.time() - ws_start_time
+    throughput = ws_messages_sent / uptime if uptime > 0 else 0
+    
+    return jsonify({
+        "type": "performance",
+        "connections": ws_connections,
+        "messages_sent": ws_messages_sent,
+        "throughput": round(throughput, 2),
+        "cpu_usage": cpu_percent,
+        "memory_usage": memory.percent,
+        "uptime": round(uptime, 2),
+        "timestamp": time.strftime("%H:%M:%S"),
+        "fallback": True,
+        "mode": "HTTP fallback"
+    })
+
+@app.route("/health")
+def health_check():
+    """Health check với thông tin fallback"""
+    return jsonify({
+        "status": "healthy",
+        "server": "WebSocket",
+        "timestamp": time.strftime("%H:%M:%S"),
+        "connections": ws_connections,
+        "messages_sent": ws_messages_sent,
+        "uptime": round(time.time() - ws_start_time, 2),
+        "fallback_available": True,
+        "websocket_available": True
+    })
+
+@app.errorhandler(404)
+def not_found(error):
+    """Custom 404 handler với fallback info"""
+    return jsonify({
+        "error": "Endpoint không tìm thấy",
+        "fallback_endpoints": [
+            "/fallback",
+            "/fallback/polling",
+            "/fallback/stream", 
+            "/fallback/performance",
+            "/stats",
+            "/health"
+        ],
+        "message": "WebSocket server hỗ trợ HTTP fallback"
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Custom 500 handler"""
+    return jsonify({
+        "error": "Lỗi server nội bộ",
+        "fallback_available": True,
+        "message": "Thử sử dụng endpoint /fallback"
+    }), 500
 # Được gọi khi client gửi sự kiện "ping" kèm theo một timestamp
 @socketio.on("ping")
 def handle_ping(data):
