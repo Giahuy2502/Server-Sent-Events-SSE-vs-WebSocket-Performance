@@ -33,7 +33,7 @@ function connectSSE(isAutoReconnect = false) {
 
   try {
     log('Đang kết nối SSE...');
-    sseSource = new EventSource("http://127.0.0.1:5000/stream");
+    sseSource = new EventSource("https://websocket-c88q.onrender.com/stream");
     
     sseSource.onopen = () => {
       sseConnected = true;
@@ -84,7 +84,7 @@ function connectSSE(isAutoReconnect = false) {
 
 function connectSSEPerformance() {
   try {
-    ssePerformanceSource = new EventSource("http://127.0.0.1:5000/performance");
+    ssePerformanceSource = new EventSource("https://websocket-c88q.onrender.com/performance");
     ssePerformanceSource.onmessage = event => {
       const data = JSON.parse(event.data);
       ssePerformanceData = data;
@@ -99,10 +99,10 @@ function connectSSEPerformance() {
 
     ssePerformanceSource.onerror = (error) => {
       log('Lỗi kết nối luồng hiệu suất SSE - sử dụng fallback performance');
-      startSSEPerformanceFallback();
+      // startSSEPerformanceFallback(); // Comment out
     };
   } catch (error) {
-    startSSEPerformanceFallback();
+    // startSSEPerformanceFallback(); // Comment out
   }
 }
 
@@ -127,7 +127,7 @@ function startSSEFallback() {
   
   // Polling data từ fallback endpoint
   sseFallbackInterval = setInterval(() => {
-    fetch('http://127.0.0.1:5000/fallback/polling')
+    fetch('https://websocket-c88q.onrender.com/fallback/polling')
       .then(response => response.json())
       .then(data => {
         if (data.messages && data.messages.length > 0) {
@@ -152,7 +152,7 @@ function startSSEFallback() {
       });
   }, 2000);
   
-  startSSEPerformanceFallback();
+  // startSSEPerformanceFallback(); // Comment out vì function không tồn tại
 }
 
 function tryReconnectSSE() {
@@ -162,7 +162,7 @@ function tryReconnectSSE() {
   
   // Tạo EventSource mới để test
   try {
-    const testSource = new EventSource("http://127.0.0.1:5000/stream");
+    const testSource = new EventSource("https://websocket-c88q.onrender.com/stream");
     
     const timeout = setTimeout(() => {
       testSource.close();

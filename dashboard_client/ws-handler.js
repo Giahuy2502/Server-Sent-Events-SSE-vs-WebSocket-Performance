@@ -33,7 +33,7 @@ function connectWebSocket(isAutoReconnect = false) {
       ws.disconnect();
     }
     
-    ws = io("http://127.0.0.1:8080");
+    ws = io("https://websocket-jaoq.onrender.com");
 
     ws.on("connect", () => {
       wsConnected = true;
@@ -114,7 +114,7 @@ function startWebSocketFallback() {
   updateConnectionUI('ws', true);
   
   wsFallbackInterval = setInterval(() => {
-    fetch('http://127.0.0.1:8080/fallback/polling')
+    fetch('https://websocket-jaoq.onrender.com/fallback/polling')
       .then(response => response.json())
       .then(data => {
         if (data.messages && data.messages.length > 0) {
@@ -164,7 +164,7 @@ function startAutoReconnect() {
 function startWebSocketPerformanceFallback() {
   setInterval(() => {
     if (wsFallbackMode) {
-      fetch('http://127.0.0.1:8080/fallback/performance')
+      fetch('https://websocket-jaoq.onrender.com/fallback/performance')
         .then(response => response.json())
         .then(data => {
           wsPerformanceData = data;
