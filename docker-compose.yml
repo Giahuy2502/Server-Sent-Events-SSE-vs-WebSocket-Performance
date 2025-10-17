@@ -15,6 +15,15 @@ services:
     networks:
       - demo-network
     restart: unless-stopped
+    # RESOURCE LIMITS - Giới hạn tài nguyên để so sánh công bằng
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0" # Maximum 1 CPU core
+          memory: 1G # Maximum 1GB RAM
+        reservations:
+          cpus: "0.5" # Reserved 0.5 CPU core
+          memory: 512M # Reserved 512MB RAM
     healthcheck:
       test:
         [
@@ -42,6 +51,15 @@ services:
     networks:
       - demo-network
     restart: unless-stopped
+    # RESOURCE LIMITS - Giới hạn tài nguyên GIỐNG HỆT SSE
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0" # Maximum 1 CPU core (SAME AS SSE)
+          memory: 1G # Maximum 1GB RAM (SAME AS SSE)
+        reservations:
+          cpus: "0.5" # Reserved 0.5 CPU core (SAME AS SSE)
+          memory: 512M # Reserved 512MB RAM (SAME AS SSE)
     healthcheck:
       test:
         [
@@ -69,6 +87,12 @@ services:
     networks:
       - demo-network
     restart: unless-stopped
+    # Dashboard không cần limit nghiêm ngặt vì chỉ serve static files
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 networks:
   demo-network:
