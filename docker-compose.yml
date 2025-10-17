@@ -1,0 +1,75 @@
+version: "3.8"
+
+services:
+  # SSE Server
+  sse-server:
+    build:
+      context: ./sse_server
+      dockerfile: Dockerfile
+    container_name: sse-server
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+    networks:
+      - demo-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:5000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # WebSocket Server
+  ws-server:
+    build:
+      context: ./ws_server
+      dockerfile: Dockerfile
+    container_name: ws-server
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+    networks:
+      - demo-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:8080/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Dashboard Client
+  dashboard:
+    build:
+      context: ./dashboard_client
+      dockerfile: Dockerfile
+    container_name: dashboard-client
+    ports:
+      - "3000:80"
+    depends_on:
+      - sse-server
+      - ws-server
+    networks:
+      - demo-network
+    restart: unless-stopped
+
+networks:
+  demo-network:
+    driver: bridge
